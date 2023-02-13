@@ -1,0 +1,350 @@
+--create or replace view newcastle_ire.athletic_staff_list as
+/**
+   * @Title:
+   * @Author: Don Harris
+   * @Description:
+   * @Maturity: [Development | Testing | Production]
+   * @Usage: [AdHoc | Mashup | Data Source | Summary Table | Fact | Dimension | Utility View]
+   * @TDX:
+   * @Git: https://github.com/UDelaware-Analytics-Platform/RS-objects/blob/main/   -- TODO: ADD FINAL PATH HERE
+   * @Granularity: 1 row per ...
+   * @Records: NNN ($today$)
+   * @Version: 0.001
+   * @History:
+   *     - 0.001 | $today$ | ROswald : Initial Release: Initial Release
+   */
+
+
+
+with w_staff_list as (select *
+                      from (select hrx.emplid,
+                                   hrx.full_name,
+                                   hrx.dept_sdescr,
+                                   hrx.dept_ldescr,
+                                   hrx.jobcode,
+                                   hrx.jobcode_sdescr,
+                                   hrx.jobcode_ldescr,
+                                   hrx.job_title,
+                                   hrx.ipeds_code_ldescr,
+                                   hrx.supervisor_id,
+                                   hrx.campus,
+                                   hrx.service_years,
+                                   hrx.service_months,
+                                   hrx.service_days,
+                                   hrx.as_of_date,
+
+                                   case
+                                       when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                           then split_part(jobcode_ldescr, ',', 1)
+                                       else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end as sub_department,
+
+                                   split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)                          as job_position,
+                                   row_number() over (partition by hrx.emplid order by hrx.as_of_date desc)       as rn
+                            from newcastle.vw_hr_daily_official_extract_all as hrx
+
+                            where hrx.pay_status not in ('T')
+                              --and a.pay_status = 'A'
+                              and hrx.dept_ldescr in ('Intercollegiate Athletics Prog', 'Student Services for Athletes')
+                            order by hrx.full_name, rn) as a
+                      where a.rn = 1
+                      order by full_name),
+
+     Department as (select wsl.emplid,
+                           case
+                               when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                   then split_part(jobcode_ldescr, ',', 1)
+                               else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end as sub_department,
+                           split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)                          as job_position,
+                           case
+                               when sub_department in
+                                    ('Academic Advisor II', 'Administrative Specialist', 'Creative Arts',
+                                     'Learning Specialist', 'SSA',
+                                     'Student Life', 'Student Svcs Athl', 'Trng & Education', 'Work Study Tutor')
+                                   or sub_department like '%Advisor%'
+                                   then 'Academic Student Services'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Administrative Assistant III')
+                                   or sub_department like '%Admin%'
+                                   or sub_department not like '%Sport%'
+                                   then 'Administration'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Business Intel Analyst')
+                                   or sub_department like '%Analyst%'
+                                   or sub_department not like '%Financial%'
+                                   then 'Analytics'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Athl & Rec Svc')
+                                   then 'Athletic Director'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Athletic Trainer I', 'Athletic Trainer II', 'Athletic Training')
+                                   then 'Athletic Training'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Baseball')
+                                   then 'Baseball'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Accountant', 'Business Operations Assistant',
+                                     'Financial Analyst I', 'Sr Financial Analyst')
+                                   or sub_department like '%Analyst%'
+                                   or sub_department not like '%Business%'
+                                then 'Business Operations'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Communications Specialist I', 'Communications Specialist II')
+                                   then 'Communications & Creative Services'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(jobcode_ldescr, ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Athletics ComplianceSpecialist', 'Compliance') then 'Compliance'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Diversity') then 'Diversity, Equity & Inclusion'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Asst Athletic Equip Manager', 'Head Equip Manager') then 'Equipment'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Event Ops & Chmpships', 'Event Ops & Guest Svc', 'Events Manager', 'Fac',
+                                     'Facilities Manager')
+                                   then 'Facilities & Operations'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Field Hockey') then 'Field Hockey'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Football Operations', 'Football Ops', 'Football', 'Football-Defense',
+                                     'Football-Offense')
+                                   then 'Football'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Sport Perf & Rec', 'Sports Nutrition Asst', 'Sports Nutritionist')
+                                   then 'Health, Well-Being, and Sport Performance'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('COO', 'Deputy Athletic Director', 'Project Mgmt Int Ops')
+                                   then 'Internal Operations'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Marketing Eng', 'Marketing&Engagement') then 'Marketing and Engagement'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Assoc Head Coach Mens BBall', 'Asst Coach II Mens Basketball',
+                                     'Mens Basketball Ops',
+                                     'Mens Basketball') then 'Mens Basketball'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Mens Lacrosse Ops', 'Mens Lacrosse') then 'Mens Lacrosse'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Mens Soccer Ops', 'Mens Soccer') then 'Mens Soccer'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Mens Tennis Ops', 'Mens Tennis') then 'Mens Tennis'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Mens Golf Ops', 'Mens Golf', 'Womens Golf Ops', 'Womens Golf')
+                                   then 'Mens/Womens Golf'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Mens Swim & Dive Ops', 'Mens Swim & Dive', 'Womens Swim & Dive Ops',
+                                     'Womens Swim & Dive')
+                                   then 'Mens/Womens Swim & Dive'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Mens Tennis Ops', 'Mens Tennis', 'Womens Tennis Ops', 'Womens Tennis')
+                                   then 'Mens/Womens Tennis'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Womens Rowing') then 'Rowing'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Athletics Ticket Sales Coord', 'Sales & Service', 'Ticket Ops')
+                                   then 'Sales & Service'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Softball') then 'Softball'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Sports & Recreation', 'Sport Admin', 'Team Operations')
+                                   then 'Sport Administration/Recreation'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Assoc Head Str Condition Coach', 'Head Str Condition Coach',
+                                     'Sports Science and Analyt',
+                                     'Strength Condition') then 'Strength & Conditioning'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Graduate Student Labor', 'Student Worker Class I', 'Student Worker Class II',
+                                     'Student Worker Class IV') then 'Student Labor'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Student Svcs Ldrs') then 'Student Services & Leadership'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Track & Field', 'Asst Coach II Womens CC&T&F', 'Womens Track')
+                                   then 'Cross Country/Track & Field'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Volleyball') then 'Volleyball'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Assoc Head Coach Womens Bball', 'Womens Basketball', 'Womens Bball',
+                                     'Womens Bball Ops')
+                                   then 'Womens Basketball'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Womens Lacrosse', 'WomensLacrosse') then 'Womens Lacrosse'
+                               when (case
+                                         when split_part(replace(jobcode_ldescr, '\'', ''), ',', 2) = ''
+                                             then split_part(replace(jobcode_ldescr, '\'', ''), ',', 1)
+                                         else ltrim(split_part(replace(jobcode_ldescr, '\'', ''), ',', 2), ' ') end) in
+                                    ('Womens Soccer Ops', 'Womens Soccer') then 'Womens Soccer'
+                               end                                                                        as Department_RollUp
+
+                    from w_staff_list wsl
+                    where date_part_year(cast(wsl.as_of_date as date)) = '2023'
+                    order by full_name)
+
+--EMPLOYEE AND STUDENT DATA FROM HR DATA
+select cast(wsl.as_of_date as date)                                            as as_of_date,
+       to_char(cast(wsl.as_of_date as date), 'Month')                          as as_of_month,
+       date_part_year(cast(wsl.as_of_date as date))                            as as_of_year,
+       date_part_year(cast(convert_timezone('UTC', 'EST', getdate()) as date)) as current_year,
+       cast(convert_timezone('UTC', 'EST', wsl.as_of_date) as date)            as as_of_timezone_update,
+       cast(convert_timezone('UTC', 'EST', getdate()) as date)                 as timezone_update,
+       case
+           when to_char(cast(convert_timezone('UTC', 'EST', getdate()) as date), 'Month') not in
+                ('January', 'February', 'March', 'April', 'May', 'June')
+               then date_part_year(cast(convert_timezone('UTC', 'EST', getdate()) as date))
+           else
+                   date_part_year(cast(convert_timezone('UTC', 'EST', getdate()) as date)) + 1 end,
+       wsl.full_name,
+       wsl.emplid,
+       wsl.dept_sdescr,
+       wsl.dept_ldescr,
+       wsl.jobcode,
+       wsl.jobcode_sdescr,
+       replace(wsl.jobcode_ldescr, '\'', '')                                   as jobcode_ldescr,
+       wsl.sub_department,
+       wsl.job_position,
+       dpt.Department_RollUp,
+       --wsl.job_title,
+       wsl.ipeds_code_ldescr,
+       wsl.supervisor_id,
+       wsl.campus,
+       wsl.service_years,
+       wsl.service_months,
+       wsl.service_days
+
+from w_staff_list wsl
+         left join Department as dpt on dpt.emplid = wsl.emplid
+where date_part_year(cast(wsl.as_of_date as date)) = '2023'
+order by full_name
+;
+
+/*
+
+with w_params as (select '0.001'::character varying(10) as build_version,
+                         sysdate                        as build_date)
+
+SELECT 1 + 1 as    my_result,
+       ppn.md5_key primary_key_md5,
+       wp.build_date,
+       wp.build_version
+from sussex.pshr_ps_names ppn
+         join w_params wp on 1 = 1
+with no schema binding;
+-- Include to prevent needing to drop when underlying views are updated.
+
+/********************************
+*  Grants
+*********************************/
+GRANT ALL ON newcastle_ire.vw_template TO GROUP ug_ire_developers;
+GRANT select ON newcastle_ire.vw_template TO udel_census;
+GRANT select ON newcastle_ire.vw_template TO GROUP ug_dba;
+
+
+/********************************
+*  Tests
+*********************************/
+-- Granularity Check
+select t.primary_key_md5, count(*)
+from newcastle_ire.vw_template t
+group by t.primary_key_md5
+having count(*) >= 2
+
+
+
+ */
